@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/sanjaykumarc/mlops-assignment/mlflow_logs/162202028662124383/d32575be7e614152878cb2060a4919d9/artifacts
+end_time: 1754305788339
+entry_point_name: ''
+experiment_id: '162202028662124383'
+lifecycle_stage: active
+run_id: d32575be7e614152878cb2060a4919d9
+run_name: unique-gnat-24
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754305788127
+status: 4
+tags: []
+user_id: sanjaykumarc

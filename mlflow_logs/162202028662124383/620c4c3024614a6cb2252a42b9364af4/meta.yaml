@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/sanjaykumarc/mlops-assignment/mlflow_logs/162202028662124383/620c4c3024614a6cb2252a42b9364af4/artifacts
+end_time: 1754317878517
+entry_point_name: ''
+experiment_id: '162202028662124383'
+lifecycle_stage: active
+run_id: 620c4c3024614a6cb2252a42b9364af4
+run_name: illustrious-gnu-217
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754317878450
+status: 3
+tags: []
+user_id: sanjaykumarc

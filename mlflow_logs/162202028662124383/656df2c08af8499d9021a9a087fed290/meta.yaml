@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/sanjaykumarc/mlops-assignment/mlflow_logs/162202028662124383/656df2c08af8499d9021a9a087fed290/artifacts
+end_time: 1754305868595
+entry_point_name: ''
+experiment_id: '162202028662124383'
+lifecycle_stage: active
+run_id: 656df2c08af8499d9021a9a087fed290
+run_name: legendary-hawk-127
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754305868556
+status: 4
+tags: []
+user_id: sanjaykumarc

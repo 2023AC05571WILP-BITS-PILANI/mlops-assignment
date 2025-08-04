@@ -1,0 +1,6 @@
+artifact_location: file:///Users/sanjaykumarc/mlops-assignment/mlflow_logs/162202028662124383
+creation_time: 1754305748163
+experiment_id: '162202028662124383'
+last_update_time: 1754305748163
+lifecycle_stage: active
+name: Iris_Logistic_Regression

@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/sanjaykumarc/mlops-assignment/mlflow_logs/162202028662124383/7289b4fd44bd4b8e9c1fcec9d7117306/artifacts
+end_time: 1754305831519
+entry_point_name: ''
+experiment_id: '162202028662124383'
+lifecycle_stage: active
+run_id: 7289b4fd44bd4b8e9c1fcec9d7117306
+run_name: languid-lamb-711
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754305831484
+status: 4
+tags: []
+user_id: sanjaykumarc
