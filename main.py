@@ -6,7 +6,7 @@ from src.transformation.transform_data import transform_data
 from src.training.train_model_logisticregression import train_model
 import joblib
 
-mlflow.set_tracking_uri(f"file://{os.getcwd()}/mlflow_logs")
+mlflow.set_tracking_uri(f"file://{os.getcwd()}/mlops-assignment/mlflow_logs")
 # Set experiment name
 mlflow.set_experiment("Iris_Logistic_Regression")
 with mlflow.start_run():

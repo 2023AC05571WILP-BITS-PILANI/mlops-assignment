@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/sanjaykumarc/mlops-assignment/mlops-assignment/mlflow_logs/466769356011913422/afc73bfdab054792ae1375418de8a396/artifacts
+end_time: 1754324189909
+entry_point_name: ''
+experiment_id: '466769356011913422'
+lifecycle_stage: active
+run_id: afc73bfdab054792ae1375418de8a396
+run_name: colorful-bug-610
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754324189572
+status: 3
+tags: []
+user_id: sanjaykumarc
