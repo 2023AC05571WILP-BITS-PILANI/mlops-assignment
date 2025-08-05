@@ -1,10 +1,13 @@
-from sklearn.linear_model import LogisticRegression
-import joblib
+def train_model(X_train, y_train, model_path=None):
+    from sklearn.linear_model import LogisticRegression
+    import joblib
+    import os
 
-def train_model(X_train, y_train, model_path):
-    """Train and save a logistic regression model."""
-    model = LogisticRegression(max_iter=200)
+    model = LogisticRegression()
     model.fit(X_train, y_train)
-    joblib.dump(model, model_path)
-    return model
 
+    if model_path:
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        joblib.dump(model, model_path)
+
+    return model

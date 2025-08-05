@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/sanjaykumarc/mlops-assignment/mlops-assignment/mlflow_logs/939559991168507879/3a72423bb4b04a4abf29afa85a7609a9/artifacts
+end_time: 1754418773336
+entry_point_name: ''
+experiment_id: '939559991168507879'
+lifecycle_stage: active
+run_id: 3a72423bb4b04a4abf29afa85a7609a9
+run_name: kindly-rook-388
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754418764391
+status: 3
+tags: []
+user_id: sanjaykumarc
