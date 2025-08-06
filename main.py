@@ -11,7 +11,7 @@ from mlflow.models import infer_signature
 
 mlflow.sklearn.autolog(disable=True)
 # Set MLflow tracking URI
-tracking_dir = os.path.join(os.getcwd(), "mlops-assignment", "mlflow_logs")
+tracking_dir = os.path.join(os.getcwd(), "mlflow_logs")
 mlflow.set_tracking_uri(f"file://{tracking_dir}")
 
 # Set experiment name
@@ -20,7 +20,7 @@ mlflow.set_experiment("Iris_Logistic_Regression")
 with mlflow.start_run():
 
     # Load data
-    data_path = os.path.join(os.getcwd(), "mlops-assignment", "data", "iris.csv")
+    data_path = os.path.join(os.getcwd(), "data", "iris.csv")
     data = load_data(data_path)
 
     # Transform data

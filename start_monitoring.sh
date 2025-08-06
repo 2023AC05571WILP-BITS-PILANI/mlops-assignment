@@ -17,7 +17,6 @@ EOF
 
 # Run Prometheus container
 docker run -d \
-  --name prometheus \
   -p 9090:9090 \
   -v "$(pwd)/prometheus_config/prometheus.yml:/etc/prometheus/prometheus.yml" \
   -v "$(pwd)/prometheus_data:/prometheus" \
@@ -25,7 +24,6 @@ docker run -d \
 
 # Run Grafana container
 docker run -d \
-  --name grafana \
   -p 3000:3000 \
   grafana/grafana
 
