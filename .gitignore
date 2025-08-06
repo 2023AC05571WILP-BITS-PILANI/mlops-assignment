@@ -1,0 +1,7 @@
+/iris-fastapi/api/__pycache__
+mlflow_logs
+mlops-assignment
+mounted_logs
+prometheus_config
+prometheus_data
+gh_token
