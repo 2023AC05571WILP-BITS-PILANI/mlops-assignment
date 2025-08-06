@@ -25,41 +25,36 @@ logger = logging.getLogger(__name__)
 #time.sleep(100000)
 try:
     mlflow.set_tracking_uri("file:///app/api/mlflow_logs")
-
     mlflow.set_experiment("Iris_Logistic_Regression")
-    runs = mlflow.search_runs(order_by=["metrics.accuracy DESC"])
-    if not runs.empty:
-        best_run_id = runs.iloc[0]["artifact_uri"]
-        logging.info(f"Best run ID: {best_run_id}")
-        best_run_id = runs.iloc[0]["run_id"]
-        logging.info(f"Best run ID: {best_run_id}")
-        best_run_id = runs.iloc[0]["run_id"]
-        model_uri = f"runs:/{best_run_id}/model"
-        model_name = "Iris_Logistic_Regression_Model"
-        model_version = "2"
-        model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
-        logger.info(f"Loaded model from URI: {model}")
-    else:
-        current_dir = os.getcwd()
-        mlflow_logs_path = os.path.join(current_dir, 'mlflow_logs')
+    client = mlflow.MlflowClient()
+    # Define your registered model name
+    model_name = "Iris_Logistic_Regression_Model"
 
-        logging.error("MLflow setup failed: No runs found for the experiment.")
-        logging.error(f"Current working directory: {current_dir}")
-        logging.error(f"Expected MLflow logs directory: {mlflow_logs_path}")
+    # Search all versions of the model
+    versions = client.search_model_versions(f"name='{model_name}'")
 
-        if os.path.exists(mlflow_logs_path):
-            try:
-                contents = os.listdir(mlflow_logs_path)
-                logging.info(f"Contents of MLflow logs directory: {contents}")
-                print("MLflow logs directory contents:")
-                for item in contents:
-                    print(f"- {item}")
-            except Exception as e:
-                logging.error(f"Error reading MLflow logs directory: {e}")
-        else:
-            logging.warning("MLflow logs directory does not exist.")
 
-        best_run_id = None  # or handle accordingly
+    best_version = None
+    best_accuracy = -1
+
+    for v in versions:
+        run_id = v.run_id
+        metrics = client.get_run(run_id).data.metrics
+        accuracy = metrics.get("accuracy", -1)
+        logger.info(f"Model version {v.version} has accuracy: {accuracy}")
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            best_version = v.version
+
+    if best_version is None:
+        logger.error("No valid model version found with accuracy metric.")
+
+
+    model_name = "Iris_Logistic_Regression_Model"
+    model_version = best_version
+    model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
+    logger.info(f"Loaded model from URI: {model}")
+    
 except Exception as e:
     logging.error(f"Error setting up MLflow: {e}")
     best_run_id = None
