@@ -1,0 +1,10 @@
+artifact_location: file:///Users/sanjaykumarc/mlops-assignment/mlops-assignment/mlflow_logs/572880046153047884/models/m-dd2a74582cde47cd834706970818367e/artifacts
+creation_timestamp: 1754479914958
+experiment_id: '572880046153047884'
+last_updated_timestamp: 1754479917881
+model_id: m-dd2a74582cde47cd834706970818367e
+model_type: null
+name: name
+source_run_id: a6dd358254184fc9a1b9026e89ecd5da
+status: 2
+status_message: null

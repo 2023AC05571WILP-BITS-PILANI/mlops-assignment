@@ -1,4 +1,4 @@
-def train_model(X_train, y_train, model_path=None):
+def train_model_lr(X_train, y_train, model_path=None):
     from sklearn.linear_model import LogisticRegression
     import joblib
     import os

@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/sanjaykumarc/mlops-assignment/mlops-assignment/mlflow_logs/572880046153047884/a6dd358254184fc9a1b9026e89ecd5da/artifacts
+end_time: 1754479917910
+entry_point_name: ''
+experiment_id: '572880046153047884'
+lifecycle_stage: active
+run_id: a6dd358254184fc9a1b9026e89ecd5da
+run_name: learned-swan-523
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1754479914869
+status: 3
+tags: []
+user_id: sanjaykumarc

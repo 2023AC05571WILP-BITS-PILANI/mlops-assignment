@@ -1,3 +1,4 @@
+import random
 from fastapi import FastAPI, Request, Response
 import numpy as np
 from pydantic import BaseModel
@@ -20,40 +21,69 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+def get_model():
+    try:
+        if (random.randint(1, 100)% 2) == 0:
+            mlflow.set_tracking_uri("file:///app/api/mlflow_logs")
+            mlflow.set_experiment("Iris_Logistic_Regression")
+            client = mlflow.MlflowClient()
+            # Define your registered model name
+            model_name = "Iris_Logistic_Regression_Model"
 
-try:
-    mlflow.set_tracking_uri("file:///app/api/mlflow_logs")
-    mlflow.set_experiment("Iris_Logistic_Regression")
-    client = mlflow.MlflowClient()
-    # Define your registered model name
-    model_name = "Iris_Logistic_Regression_Model"
+            # Search all versions of the model
+            versions = client.search_model_versions(f"name='{model_name}'")
 
-    # Search all versions of the model
-    versions = client.search_model_versions(f"name='{model_name}'")
+            best_version = None
+            best_accuracy = -1
 
-    best_version = None
-    best_accuracy = -1
+            for v in versions:
+                run_id = v.run_id
+                metrics = client.get_run(run_id).data.metrics
+                accuracy = metrics.get("accuracy", -1)
+                # logger.info(f"Model version {v.version} has accuracy: {accuracy}")
+                if accuracy > best_accuracy:
+                    best_accuracy = accuracy
+                    best_version = v.version
 
-    for v in versions:
-        run_id = v.run_id
-        metrics = client.get_run(run_id).data.metrics
-        accuracy = metrics.get("accuracy", -1)
-        logger.info(f"Model version {v.version} has accuracy: {accuracy}")
-        if accuracy > best_accuracy:
-            best_accuracy = accuracy
-            best_version = v.version
+            if best_version is None:
+                logger.error("No valid model version found with accuracy metric.")
 
-    if best_version is None:
-        logger.error("No valid model version found with accuracy metric.")
+            model_version = best_version
+            model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
+            logger.info(f"Prediction using : Iris_Logistic_Regression_Model")
+        else:
+            mlflow.set_tracking_uri("file:///app/api/mlflow_logs")
+            mlflow.set_experiment("Iris_Random_Forest")
+            client = mlflow.MlflowClient()
+            # Define your registered model name
+            model_name = "Iris_Random_Forest_Model"
 
-    model_name = "Iris_Logistic_Regression_Model"
-    model_version = best_version
-    model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
-    logger.info(f"Loaded model from URI: {model}")
+            # Search all versions of the model
+            versions = client.search_model_versions(f"name='{model_name}'")
 
-except Exception as e:
-    logging.error(f"Error setting up MLflow: {e}")
-    best_run_id = None
+            best_version = None
+            best_accuracy = -1
+
+            for v in versions:
+                run_id = v.run_id
+                metrics = client.get_run(run_id).data.metrics
+                accuracy = metrics.get("accuracy", -1)
+                # logger.info(f"Model version {v.version} has accuracy: {accuracy}")
+                if accuracy > best_accuracy:
+                    best_accuracy = accuracy
+                    best_version = v.version
+
+            if best_version is None:
+                logger.error("No valid model version found with accuracy metric.")
+
+            model_version = best_version
+            model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
+            logger.info(f"Prediction using : Iris_Random_Forest_Model")
+
+    except Exception as e:
+        logging.error(f"Error setting up MLflow: {e}")
+        best_run_id = None
+    return model
 
 # FastAPI app
 app = FastAPI()
@@ -95,7 +125,7 @@ def predict(input: Input):
     ]])
     logger.info(f"Received prediction request with features: {features}")
     try:
-        prediction = model.predict(features)
+        prediction = get_model().predict(features)
         predicted_class = prediction[0]
         logger.info(f"Prediction result: {predicted_class}")
         return {"prediction": predicted_class}
