@@ -1,9 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 import numpy as np
 from pydantic import BaseModel
 import os
 import mlflow
 import logging
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CollectorRegistry
+
+
+
 
 
 # Setup logging
@@ -63,6 +68,24 @@ class Input(BaseModel):
     sepal_width: float
     petal_length: float
     petal_width: float
+
+
+# Create a Prometheus Counter metric
+REQUEST_COUNT = Counter(
+    "app_requests_total", "Total number of requests", ["method", "endpoint"]
+)
+
+
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    response = await call_next(request)
+    REQUEST_COUNT.labels(method=request.method, endpoint=request.url.path).inc()
+    return response
+
+
+@app.get("/metrics")
+async def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/predict")
