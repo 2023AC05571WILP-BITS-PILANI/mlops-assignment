@@ -21,9 +21,10 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
 def get_model():
     try:
-        if (random.randint(1, 100)% 2) == 0:
+        if (random.randint(1, 100) % 2) == 0:
             mlflow.set_tracking_uri("file:///app/api/mlflow_logs")
             mlflow.set_experiment("Iris_Logistic_Regression")
             client = mlflow.MlflowClient()
@@ -40,17 +41,18 @@ def get_model():
                 run_id = v.run_id
                 metrics = client.get_run(run_id).data.metrics
                 accuracy = metrics.get("accuracy", -1)
-                # logger.info(f"Model version {v.version} has accuracy: {accuracy}")
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_version = v.version
 
             if best_version is None:
-                logger.error("No valid model version found with accuracy metric.")
+                logger.error(
+                    "No valid model version found with accuracy metric.")
 
             model_version = best_version
-            model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
-            logger.info(f"Prediction using : Iris_Logistic_Regression_Model")
+            model = mlflow.pyfunc.load_model(
+                f"models:/{model_name}/{model_version}")
+            logger.info("Prediction using : Iris_Logistic_Regression_Model")
         else:
             mlflow.set_tracking_uri("file:///app/api/mlflow_logs")
             mlflow.set_experiment("Iris_Random_Forest")
@@ -68,22 +70,23 @@ def get_model():
                 run_id = v.run_id
                 metrics = client.get_run(run_id).data.metrics
                 accuracy = metrics.get("accuracy", -1)
-                # logger.info(f"Model version {v.version} has accuracy: {accuracy}")
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_version = v.version
 
             if best_version is None:
-                logger.error("No valid model version found with accuracy metric.")
+                logger.error(
+                    "No valid model version found with accuracy metric.")
 
             model_version = best_version
-            model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
-            logger.info(f"Prediction using : Iris_Random_Forest_Model")
+            model = mlflow.pyfunc.load_model(
+                f"models:/{model_name}/{model_version}")
+            logger.info("Prediction using : Iris_Random_Forest_Model")
 
     except Exception as e:
         logging.error(f"Error setting up MLflow: {e}")
-        best_run_id = None
     return model
+
 
 # FastAPI app
 app = FastAPI()
