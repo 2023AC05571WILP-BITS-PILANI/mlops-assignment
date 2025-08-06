@@ -1,0 +1,68 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest fastapi httpx numpy uvicorn scikit-learn mlflow  pydantic
+
+      - name: Lint with flake8
+        run: flake8 iris-fastapi/api/
+
+      - name: Run tests with pytest
+        run: pytest iris-fastapi/api/
+
+  docker-build-push:
+    needs: lint-test
+    runs-on: ubuntu-latest
+    steps:
+      
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/iris-predictor:latest .
+
+      - name: Push Docker image
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/iris-predictor:latest
+
+  deploy:
+    needs: docker-build-push
+    runs-on: macos-latest
+    steps:
+      - name: Deploy locally on Mac
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          echo "Deploying container locally on Mac..."
+          docker pull $DOCKER_USERNAME/iris-predictor:latest
+          docker stop myapp || true
+          docker rm myapp || true
+          docker run -d --name myapp -p 8000:8000 $DOCKER_USERNAME/iris-predictor:latest
+
+
+# To run this workflow locally using act, use:
+# act push --secret DOCKER_USERNAME=your_docker_username --secret DOCKER_PASSWORD=your_docker_password --secret EC2_USER=your_ec2_user --secret EC2_HOST=your_ec2_host

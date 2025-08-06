@@ -1,14 +1,9 @@
-import time
 from fastapi import FastAPI
 import numpy as np
 from pydantic import BaseModel
-import uvicorn
 import os
 import mlflow
-import pandas as pd
 import logging
-from sklearn import datasets
-
 
 
 # Setup logging
@@ -20,9 +15,11 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+
 logger = logging.getLogger(__name__)
 
-#time.sleep(100000)
+
 try:
     mlflow.set_tracking_uri("file:///app/api/mlflow_logs")
     mlflow.set_experiment("Iris_Logistic_Regression")
@@ -32,7 +29,6 @@ try:
 
     # Search all versions of the model
     versions = client.search_model_versions(f"name='{model_name}'")
-
 
     best_version = None
     best_accuracy = -1
@@ -49,25 +45,25 @@ try:
     if best_version is None:
         logger.error("No valid model version found with accuracy metric.")
 
-
     model_name = "Iris_Logistic_Regression_Model"
     model_version = best_version
     model = mlflow.pyfunc.load_model(f"models:/{model_name}/{model_version}")
     logger.info(f"Loaded model from URI: {model}")
-    
+
 except Exception as e:
     logging.error(f"Error setting up MLflow: {e}")
     best_run_id = None
 
-
 # FastAPI app
 app = FastAPI()
+
 
 class Input(BaseModel):
     sepal_length: float
     sepal_width: float
     petal_length: float
     petal_width: float
+
 
 @app.post("/predict")
 def predict(input: Input):
@@ -91,5 +87,8 @@ def predict(input: Input):
 # Uncomment to run locally
 # if __name__ == "__main__":
 #     uvicorn.run(app, host="0.0.0.0", port=8000)
-#curl -X POST "http://localhost:8000/predict" -H "Content-Type: application/json" -d '{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}'
+# curl -X POST "http://localhost:8000/predict" \
+# -H "Content-Type: application/json" \
+# -d '{"sepal_length": 5.1, "sepal_width": 3.5, \
+#  "petal_length": 1.4, "petal_width": 0.2}'
 #
