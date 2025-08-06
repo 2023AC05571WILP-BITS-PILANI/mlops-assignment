@@ -5,10 +5,6 @@ import os
 import mlflow
 import logging
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
-from prometheus_client import CollectorRegistry
-
-
-
 
 
 # Setup logging
@@ -79,7 +75,8 @@ REQUEST_COUNT = Counter(
 @app.middleware("http")
 async def prometheus_middleware(request: Request, call_next):
     response = await call_next(request)
-    REQUEST_COUNT.labels(method=request.method, endpoint=request.url.path).inc()
+    REQUEST_COUNT.labels(method=request.method,
+                         endpoint=request.url.path).inc()
     return response
 
 
