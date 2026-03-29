@@ -1,5 +1,105 @@
-/iris-fastapi/api/__pycache__
-mounted_logs
-prometheus_config
-prometheus_data
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+wheels/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+!.env.example
+
+# ── Jupyter ────────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Testing & coverage ─────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+nosetests.xml
+test-results/
+
+# ── Type checking & linting ───────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+
+# ── ML / MLflow ───────────────────────────────────────────────────────────────
+mlflow_logs/
+mlruns/
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.onnx
+*.pt
+*.pth
+*.pb
+
+# ── Data files (large / generated) ────────────────────────────────────────────
+data/weather_daily.csv
+data/weather_india/
+data/weather_india_combined.csv
+data/weather_zone_*.csv
+data/calendar_events_parsed.csv
+data/calendar_features_daily.csv
+# DVC tracks the actual data files; keep .dvc pointer files
+!data/*.dvc
+!data/**/*.dvc
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+mounted_logs/
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── Monitoring / Prometheus ───────────────────────────────────────────────────
+prometheus_data/
+# keep config, ignore runtime data
+!prometheus_config/
+
+# ── OS & editor artefacts ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
 gh_token
+*.pem
+*.key
+secrets/
+
+# ── Backup files ──────────────────────────────────────────────────────────────
+*.bak
+*.orig
