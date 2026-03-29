@@ -111,7 +111,10 @@ already have a complete CSV are skipped automatically.
 
 ## Variables Collected
 
-### Archive (ERA5) — 16 variables
+Only temperature and rain variables are fetched. Wind, radiation, humidity,
+pressure and sunshine are excluded to keep the dataset lean and focused.
+
+### Archive (ERA5) — 9 variables fetched
 
 | Variable | Unit | Description |
 |---|---|---|
@@ -123,16 +126,9 @@ already have a complete CSV are skipped automatically.
 | `precipitation_sum` | mm | Total precipitation (rain + snow water equivalent) |
 | `rain_sum` | mm | Liquid precipitation only |
 | `snowfall_sum` | cm | Snowfall accumulation |
-| `wind_speed_10m_max` | km/h | Peak wind speed at 10 m |
-| `wind_gusts_10m_max` | km/h | Peak wind gust at 10 m |
-| `wind_direction_10m_dominant` | ° | Dominant wind direction |
-| `weather_code` | WMO | WMO weather interpretation code |
-| `daylight_duration` | s | Duration of astronomical daylight |
-| `sunshine_duration` | s | Duration of actual sunshine (cloud-filtered) |
-| `shortwave_radiation_sum` | MJ/m² | Total incoming solar radiation |
-| `et0_fao_evapotranspiration` | mm | Reference evapotranspiration (FAO-56) |
+| `weather_code` | WMO | WMO code — used to derive `weather_category` label, then dropped |
 
-### Climate Projection (MRI-AGCM3-2-S) — 11 variables
+### Climate Projection (MRI-AGCM3-2-S) — 6 variables fetched
 
 | Variable | Unit |
 |---|---|
@@ -140,15 +136,10 @@ already have a complete CSV are skipped automatically.
 | `precipitation_sum` | mm |
 | `rain_sum` | mm |
 | `snowfall_sum` | cm |
-| `wind_speed_10m_max` | km/h |
-| `wind_speed_10m_mean` | km/h |
-| `shortwave_radiation_sum` | MJ/m² |
-| `relative_humidity_2m_mean` | % |
-| `pressure_msl_mean` | hPa |
 
-> Variables not available in the climate model (e.g. `apparent_temperature`,
-> `wind_gusts`, `weather_code`, `et0`) are left as `NaN` for future rows and
-> are clearly marked with `data_source = "climate_projection"`.
+> `apparent_temperature` and `weather_code` are not available in the climate
+> API; those columns are `NaN` for future projection rows.
+> `data_source = "climate_projection"` marks all such rows.
 
 ---
 
@@ -156,19 +147,19 @@ already have a complete CSV are skipped automatically.
 
 Added automatically after fetching, regardless of API source:
 
-| Feature | Logic | Why useful |
+| Feature | Logic | Notes |
 |---|---|---|
 | `temp_range` | `max − min` | Diurnal variation; high = arid/continental |
-| `day_length_hours` | `daylight_duration / 3600` | Human-readable hours |
-| `sunshine_hours` | `sunshine_duration / 3600` | Cloud-cover proxy |
-| `season_meteo` | Month → Winter/Spring/Summer/Autumn (NH) | Standard 4-season label |
-| `season_india` | Month → 6-season Ritu system | Culturally relevant seasons |
 | `is_rainy_day` | `precipitation_sum > 1 mm` → 0/1 | Binary rain flag |
 | `is_hot_day` | `temperature_2m_max > 35 °C` → 0/1 | Binary heat flag |
 | `is_cold_day` | `temperature_2m_min < 10 °C` → 0/1 | Binary cold flag |
-| `weather_category` | WMO code → human label (Clear / Rain / Thunderstorm / …) | Categorical feature |
-| `uv_risk` | Radiation-based UV index estimate | Health / agri proxy |
+| `season_meteo` | Month → Winter/Spring/Summer/Autumn (NH) | Standard 4-season label |
+| `season_india` | Month → 6-season Ritu system | Culturally relevant seasons |
+| `weather_category` | WMO code → human label (archive only) | e.g. `Rain`, `Thunderstorm`, `Clear / Partly Cloudy`; `NaN` for climate rows |
+| `year_norm` | `(year − 2010) / 20` → [0, 1] | Normalised temporal position |
 | `data_source` | `"archive_era5"` or `"climate_projection"` | Provenance flag for ML |
+
+**Removed from previous version:** `day_length_hours`, `sunshine_hours`, `uv_risk`, and raw `weather_code` number are no longer in the output. `weather_code` is decoded to `weather_category` string then dropped.
 
 Identity columns stamped on every row (front of DataFrame):
 
@@ -356,33 +347,59 @@ stage?" without needing to hard-code calendar knowledge.
 
 ### Output columns explained
 
-A sample row from `weather_zone_koppen.csv`:
+A sample row from `weather_zone_koppen.csv` (2015-01-01, Tropical_WetDry_S — 9 Tamil Nadu cities):
 
 ```
-date                       2024-07-15
-koppen                     Tropical_WetDry_S
-temperature_2m_max_mean    32.4
-temperature_2m_max_median  32.1
-temperature_2m_max_std      1.8   ← high std = zone is not uniform today
-precipitation_sum_mean     18.7
-precipitation_sum_median    8.2   ← median << mean → a few cities had heavy rain
-precipitation_sum_std      24.3   ← confirms high spatial variability
-…
-city_count                 58
-city_list                  Amaravati,Aurangabad,Bengaluru,Chennai,…
-season_india_mode          Varsha (Monsoon)
-weather_category_mode      Rain
+date                          2015-01-01
+koppen                        Tropical_WetDry_S
+temperature_2m_max_mean       30.4 °C
+temperature_2m_max_median     30.9 °C
+temperature_2m_max_std         1.5 °C   ← spread across 9 cities
+precipitation_sum_mean         1.7 mm
+precipitation_sum_median       1.0 mm   ← median < mean → a few cities had heavier rain
+precipitation_sum_std          2.1 mm   ← high variability within zone
+temp_range_mean                6.8 °C
+is_rainy_day_mean              0.44     ← 44% of cities had rain that day
+is_hot_day_mean                0.0      ← none exceeded 35 °C
+is_cold_day_mean               0.0
+season_meteo_mode              Winter
+season_india_mode              Shishira (Winter)
+weather_category_mode          Drizzle
+city_count                     9
+city_list                      Chennai,Coimbatore,Erode,…
+```
+
+`weather_zone_monsoon.csv` additionally contains:
+```
+in_monsoon_onset_window        False   (Jan 1 is outside Jun onset window)
+in_monsoon_withdrawal_window   False
 ```
 
 ### Dimension reduction summary
 
-| Input | Rows |
+| Dataset | Rows | Date coverage |
+|---|---|---|
+| Raw city-level combined CSV | 45,288 (9 cities × 5,032 days) | 2015–2030 (partial — see note) |
+| **`weather_zone_koppen.csv`** | **5,032** (1 zone × 5,032 days) | 2015–2030 |
+| **`weather_zone_monsoon.csv`** | **5,032** (1 zone × 5,032 days) | 2015–2030 |
+| **`weather_zone_imd.csv`** | **5,032** (1 zone × 5,032 days) | 2015–2030 |
+| **`weather_zone_agri.csv`** | **5,032** (1 zone × 5,032 days) | 2015–2030 |
+
+> **Current data**: Tamil Nadu only (9 cities). Years 2010–2014 and 2024–2025
+> were skipped due to Open-Meteo API rate limiting (HTTP 429) during the
+> initial fetch run. Re-run `fetch_weather.py --state "Tamil Nadu"` (without
+> `--force`) to fill in the missing years automatically — the resume logic
+> will only fetch what is absent. Run `--all-india` to expand to all 165 cities.
+
+At full scale (165 cities, 2010–2030):
+
+| Dataset | Rows |
 |---|---|
-| Raw city-level combined CSV | 165 cities × 7,670 days ≈ **1.27 M rows** |
-| **`weather_zone_koppen.csv`** | **5 zones** × 7,670 days ≈ **38 K rows** |
-| **`weather_zone_monsoon.csv`** | **5 zones** × 7,670 days ≈ **38 K rows** |
-| **`weather_zone_imd.csv`** | **24 zones** × 7,670 days ≈ **184 K rows** |
-| **`weather_zone_agri.csv`** | **6 zones** × 7,670 days ≈ **46 K rows** |
+| Raw combined CSV | ~1.27 M (165 × 7,670 days) |
+| **`weather_zone_koppen.csv`** | **~38 K** (5 zones × 7,670 days) |
+| **`weather_zone_monsoon.csv`** | **~38 K** (5 zones × 7,670 days) |
+| **`weather_zone_imd.csv`** | **~184 K** (24 zones × 7,670 days) |
+| **`weather_zone_agri.csv`** | **~46 K** (6 zones × 7,670 days) |
 
 ---
 
@@ -405,21 +422,32 @@ data/
 ### Column naming pattern for zone CSVs
 
 ```
-<variable>_mean     — zone mean for that day
-<variable>_median   — zone median for that day
-<variable>_std      — zone standard deviation for that day
-city_count          — number of cities aggregated
-city_list           — comma-separated city names
-season_meteo_mode   — most common meteorological season
-season_india_mode   — most common Indian Ritu season
-weather_category_mode — most common WMO weather category
+<variable>_mean              — zone mean for that day
+<variable>_median            — zone median for that day
+<variable>_std               — zone standard deviation for that day
+city_count                   — number of cities aggregated
+city_list                    — comma-separated city names
+season_meteo_mode            — most common meteorological season (NH 4-season)
+season_india_mode            — most common Indian Ritu season
+weather_category_mode        — most common WMO weather category (NaN for future rows)
 ```
 
 For `weather_zone_monsoon.csv` only:
 ```
-in_monsoon_onset_window       boolean
-in_monsoon_withdrawal_window  boolean
+in_monsoon_onset_window       boolean — date within typical SW/NE monsoon arrival window
+in_monsoon_withdrawal_window  boolean — date within typical retreat window
 ```
+
+**Numeric variables aggregated (13 per zone):**
+
+| Variable | Type |
+|---|---|
+| `temperature_2m_max/min/mean` | raw °C |
+| `apparent_temperature_max/min` | raw °C (archive only; NaN for climate rows) |
+| `precipitation_sum`, `rain_sum`, `snowfall_sum` | raw mm/cm |
+| `temp_range` | derived °C |
+| `is_rainy_day`, `is_hot_day`, `is_cold_day` | derived 0/1 flags |
+| `year_norm` | derived [0,1] |
 
 ---
 
@@ -481,6 +509,8 @@ python src/data_collection/fetch_weather.py --all-india --force
 
 | Decision | Reason |
 |---|---|
+| **Temperature + rain only** | Wind, radiation, humidity and pressure removed to keep features focused; temperature and rain are the primary drivers of agricultural and calendar-event patterns |
+| **`weather_category` string instead of raw WMO code** | The raw integer code (0–99) is hard for a model to use directly; the decoded label is a clean categorical feature. Raw code is dropped after decoding |
 | **ERA5 + MRI-AGCM3-2-S stitching** | ERA5 is the most accurate historical reanalysis; MRI-AGCM3-2-S is the highest-resolution (20 km) CMIP6 model available on Open-Meteo for India |
 | **Batch API (50 cities/call)** | Reduces API calls from ~3,465 (165 × 21 years) to ~168; respects free-tier rate limits |
 | **Per-city CSV + combined merge** | Allows resuming interrupted runs; easy to re-fetch only one city |

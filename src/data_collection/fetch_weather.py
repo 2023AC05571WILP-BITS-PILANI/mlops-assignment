@@ -170,36 +170,29 @@ CITY_PRESETS: dict[str, tuple[float, float]] = {
 # Variable lists
 # ─────────────────────────────────────────────────────────────────────────────
 ARCHIVE_VARS = [
+    # Temperature
     "temperature_2m_max",
     "temperature_2m_min",
     "temperature_2m_mean",
     "apparent_temperature_max",
     "apparent_temperature_min",
+    # Rain / precipitation
     "precipitation_sum",
     "rain_sum",
     "snowfall_sum",
-    "wind_speed_10m_max",
-    "wind_gusts_10m_max",
-    "wind_direction_10m_dominant",
+    # Weather code — kept only to derive weather_category label; raw col dropped after
     "weather_code",
-    "daylight_duration",
-    "sunshine_duration",
-    "shortwave_radiation_sum",
-    "et0_fao_evapotranspiration",
 ]
 
 CLIMATE_VARS = [
+    # Temperature
     "temperature_2m_max",
     "temperature_2m_min",
     "temperature_2m_mean",
+    # Rain / precipitation
     "precipitation_sum",
     "rain_sum",
     "snowfall_sum",
-    "wind_speed_10m_max",
-    "wind_speed_10m_mean",
-    "shortwave_radiation_sum",
-    "relative_humidity_2m_mean",
-    "pressure_msl_mean",
 ]
 
 # WMO weather code → human-readable category
@@ -641,42 +634,40 @@ def _uv_risk(uv) -> str:
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Adds weather-derived contextual features onto the raw API columns.
+    Adds category and grouping features derived from temperature and rain columns.
 
-    New columns
-    ────────────
-    temp_range            diurnal temperature range (max − min), °C
-    day_length_hours      daylight_duration / 3600
-    sunshine_hours        sunshine_duration / 3600
-    season_meteo          standard 4-season meteorological label (NH)
-    season_india          Indian 6-season Ritu label
-    is_rainy_day          1 if precipitation_sum > 1 mm
-    is_hot_day            1 if temperature_2m_max > 35 °C
-    is_cold_day           1 if temperature_2m_min < 10 °C
-    weather_category      plain-language WMO code group (archive only)
-    uv_risk               UV risk label (archive only)
+    Kept columns (raw)
+    ──────────────────
+    temperature_2m_max/min/mean   °C
+    apparent_temperature_max/min  °C (feels-like; archive only)
+    precipitation_sum             mm
+    rain_sum                      mm
+    snowfall_sum                  cm
+
+    Derived categories / groupings (new)
+    ─────────────────────────────────────
+    temp_range       diurnal temperature range (max − min), °C
+    is_rainy_day     1 if precipitation_sum > 1 mm, else 0
+    is_hot_day       1 if temperature_2m_max > 35 °C, else 0
+    is_cold_day      1 if temperature_2m_min < 10 °C, else 0
+    season_meteo     standard 4-season meteorological label (NH)
+    season_india     Indian 6-season Ritu label
+    weather_category plain-language WMO weather group (archive only)
+    year_norm        year normalised to [0, 1] over 2010–2030
+
+    Note: raw weather_code is dropped after deriving weather_category.
     """
     df = df.copy()
     df["date"] = pd.to_datetime(df["date"])
     month = df["date"].dt.month
 
-    # ── Temperature ──────────────────────────────────────────────────────────
+    # ── Temperature derived ───────────────────────────────────────────────────
     if "temperature_2m_max" in df.columns and "temperature_2m_min" in df.columns:
         df["temp_range"] = (
             df["temperature_2m_max"] - df["temperature_2m_min"]
         ).round(2)
 
-    # ── Daylight & sunshine ──────────────────────────────────────────────────
-    if "daylight_duration" in df.columns:
-        df["day_length_hours"] = (df["daylight_duration"] / 3600).round(3)
-    if "sunshine_duration" in df.columns:
-        df["sunshine_hours"] = (df["sunshine_duration"] / 3600).round(3)
-
-    # ── Seasons ───────────────────────────────────────────────────────────────
-    df["season_meteo"]  = month.map(METEO_SEASON)
-    df["season_india"]  = month.map(RITU_MAP)
-
-    # ── Binary weather flags ──────────────────────────────────────────────────
+    # ── Binary flags ──────────────────────────────────────────────────────────
     if "precipitation_sum" in df.columns:
         df["is_rainy_day"] = (df["precipitation_sum"].fillna(0) > 1.0).astype(int)
     if "temperature_2m_max" in df.columns:
@@ -684,17 +675,16 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     if "temperature_2m_min" in df.columns:
         df["is_cold_day"]  = (df["temperature_2m_min"].fillna(50) < 10.0).astype(int)
 
-    # ── WMO weather category (available only in archive data) ────────────────
+    # ── Season groupings ──────────────────────────────────────────────────────
+    df["season_meteo"] = month.map(METEO_SEASON)
+    df["season_india"] = month.map(RITU_MAP)
+
+    # ── Weather category (derive from code, then drop the raw numeric code) ───
     if "weather_code" in df.columns:
         df["weather_category"] = df["weather_code"].apply(_wmo_category)
+        df.drop(columns=["weather_code"], inplace=True)
 
-    # ── UV risk (available only in archive data) ──────────────────────────────
-    # Note: UV index is not a standard Open-Meteo archive daily variable; if
-    # the column exists (e.g. added via future extension) it will be annotated.
-    if "uv_index_max" in df.columns:
-        df["uv_risk"] = df["uv_index_max"].apply(_uv_risk)
-
-    # ── Normalised year (matches scale in calendar_features_daily.csv) ────────
+    # ── Normalised year ───────────────────────────────────────────────────────
     df["year_norm"] = ((df["date"].dt.year - 2010) / (2030 - 2010)).round(4)
 
     return df

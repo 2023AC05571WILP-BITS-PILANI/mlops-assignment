@@ -147,11 +147,15 @@ def aggregate_zone(
     result = result.merge(extra, on=["date", zone_col])
 
     # -- categorical mode for string weather cols ----
+    def _safe_mode(x):
+        m = x.dropna().mode()
+        return m.iloc[0] if len(m) > 0 else pd.NA
+
     for cat_col in ("season_meteo", "season_india", "weather_category"):
         if cat_col in valid.columns:
             mode_df = (
                 valid.groupby(["date", zone_col])[cat_col]
-                .agg(lambda x: x.mode().iloc[0] if len(x) > 0 else pd.NA)
+                .agg(_safe_mode)
                 .reset_index()
                 .rename(columns={cat_col: f"{cat_col}_mode"})
             )
