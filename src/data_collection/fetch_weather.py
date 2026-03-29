@@ -92,6 +92,18 @@ Usage
   # All cities of a single state
   python src/data_collection/fetch_weather.py --state "Tamil Nadu"
 
+  # Verify day-level completeness from 2010-01-01 to today and fill any gaps
+  python src/data_collection/fetch_weather.py --verify
+  python src/data_collection/fetch_weather.py --verify --all-india
+  python src/data_collection/fetch_weather.py --verify --state "Tamil Nadu"
+  python src/data_collection/fetch_weather.py --verify --dry-run   # report only
+
+  The --verify flag operates at the individual DAY level (not year level).
+  It scans every city CSV, finds any dates missing between 2010-01-01 and
+  today, groups them into the fewest possible date ranges, fetches only those
+  ranges, inserts the rows in the correct chronological position, and
+  re-merges the combined CSV.  Safe to run at any time; idempotent.
+
 Available --city presets
 -------------------------
   delhi, mumbai, chennai, kolkata, bengaluru, hyderabad,
@@ -611,6 +623,204 @@ def _merge_india_csvs(out_dir: Path, combined_path: Path) -> None:
 # Derived feature engineering
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Day-level verification & gap-filling
+# ─────────────────────────────────────────────────────────────────────────────
+
+def find_missing_days(output_path: Path, start: date, end: date) -> list[date]:
+    """
+    Return a sorted list of calendar dates absent from the city CSV.
+
+    Only dates up to yesterday are checked — today's ERA5 data is not yet
+    published and future climate-projection dates are not "missing".
+    """
+    check_end = min(end, date.today() - timedelta(days=1))
+    all_days  = {start + timedelta(days=i)
+                 for i in range((check_end - start).days + 1)}
+    if not output_path.exists():
+        return sorted(all_days)
+    df      = pd.read_csv(output_path, usecols=["date"], parse_dates=["date"])
+    present = {d.date() for d in pd.to_datetime(df["date"])}
+    return sorted(all_days - present)
+
+
+def _group_into_ranges(days: list[date]) -> list[tuple[date, date]]:
+    """Group a sorted list of dates into contiguous (start, end) pairs."""
+    if not days:
+        return []
+    ranges: list[tuple[date, date]] = []
+    r_start = r_end = days[0]
+    for d in days[1:]:
+        if (d - r_end).days == 1:
+            r_end = d
+        else:
+            ranges.append((r_start, r_end))
+            r_start = r_end = d
+    ranges.append((r_start, r_end))
+    return ranges
+
+
+def fill_missing_days(
+    missing:     list[date],
+    lat:         float,
+    lon:         float,
+    city_name:   str,
+    output_path: Path,
+    loc_meta:    dict | None = None,
+    dry_run:     bool = False,
+) -> int:
+    """
+    Fetch and insert missing days into the city CSV.
+
+    Consecutive missing days are grouped into the fewest contiguous date
+    ranges to minimise API calls.  Each range is split at the archive/climate
+    boundary if it spans it.  The updated rows are merged back into the
+    existing CSV in chronological order.
+
+    Returns the number of days successfully filled (0 on dry-run).
+    """
+    if not missing:
+        return 0
+
+    today          = date.today()
+    archive_cutoff = today - timedelta(days=ARCHIVE_LAG)
+    climate_start  = archive_cutoff + timedelta(days=1)
+    ranges         = _group_into_ranges(missing)
+
+    print(f"    ⚠  {len(missing)} missing day(s) in {len(ranges)} range(s)")
+    if dry_run:
+        for r_start, r_end in ranges:
+            n = (r_end - r_start).days + 1
+            print(f"       {r_start} → {r_end}  ({n}d)")
+        return 0
+
+    new_chunks: list[pd.DataFrame] = []
+    filled = 0
+
+    for r_start, r_end in ranges:
+        segments: list[tuple[str, date, date]] = []
+        if r_start <= archive_cutoff:
+            segments.append(("archive", r_start, min(r_end, archive_cutoff)))
+        if r_end >= climate_start:
+            segments.append(("climate", max(r_start, climate_start), r_end))
+
+        for src, s_start, s_end in segments:
+            n = (s_end - s_start).days + 1
+            print(f"    📥  {src:<8}  {s_start} → {s_end}  ({n}d) … ",
+                  end="", flush=True)
+            try:
+                if src == "archive":
+                    chunk = fetch_archive_chunk(s_start, s_end, lat, lon)
+                else:
+                    chunk = fetch_climate_chunk(s_start, s_end, lat, lon)
+                chunk = add_derived_features(chunk)
+                # stamp full location identity
+                chunk["city"]      = city_name
+                chunk["latitude"]  = round(lat, 4)
+                chunk["longitude"] = round(lon, 4)
+                if loc_meta:
+                    for fld in ("state", "state_code", "district"):
+                        if fld in loc_meta:
+                            chunk[fld] = loc_meta[fld]
+                new_chunks.append(chunk)
+                filled += len(chunk)
+                print(f"✓  ({len(chunk)} rows)")
+            except Exception as exc:
+                print(f"✗  {exc}")
+            time.sleep(REQUEST_DELAY)
+
+    if not new_chunks:
+        return 0
+
+    existing = (
+        pd.read_csv(output_path, parse_dates=["date"])
+        if output_path.exists() else pd.DataFrame()
+    )
+    all_frames = ([existing] if not existing.empty else []) + new_chunks
+    combined = (
+        pd.concat(all_frames, ignore_index=True)
+          .drop_duplicates(subset=["date"])
+          .sort_values("date")
+          .reset_index(drop=True)
+    )
+    id_cols    = ["date", "city", "state", "state_code", "district",
+                  "latitude", "longitude"]
+    other_cols = [c for c in combined.columns if c not in id_cols]
+    combined   = combined[[c for c in id_cols if c in combined.columns] + other_cols]
+    combined.to_csv(output_path, index=False)
+    print(f"    💾  {output_path.name}  →  {len(combined):,} rows total")
+    return filled
+
+
+def verify_all_india(
+    locations:     list[dict],
+    start:         date,
+    out_dir:       Path,
+    combined_path: Path,
+    dry_run:       bool = False,
+) -> None:
+    """
+    Scan every per-city CSV for missing days between *start* and yesterday.
+
+    For each city:
+      1. Compute the full expected date range  [start, yesterday].
+      2. Subtract dates already present in the CSV.
+      3. Group remaining gaps into the fewest contiguous ranges.
+      4. Fetch and insert each gap range, splitting at the archive/climate
+         boundary as needed.
+      5. Re-merge all city CSVs into the combined file.
+
+    Safe to run repeatedly — it is fully idempotent.
+    """
+    today     = date.today()
+    check_end = today - timedelta(days=1)
+
+    sep = "─" * 62
+    print(sep)
+    print("  🔍  VERIFY MODE — day-level completeness check")
+    print(f"  Period checked  : {start}  →  {check_end}")
+    print(f"  Cities          : {len(locations)}")
+    print(sep)
+
+    total_missing = 0
+    any_filled    = False
+
+    for loc in locations:
+        slug    = city_slug(loc)
+        fp      = out_dir / f"{slug}.csv"
+        city    = loc["city"]
+        missing = find_missing_days(fp, start, check_end)
+
+        if not missing:
+            print(f"  ✅  {city:<25} complete")
+            continue
+
+        print(f"  ⚠   {city:<25} {len(missing)} missing day(s)")
+        total_missing += len(missing)
+        filled = fill_missing_days(
+            missing     = missing,
+            lat         = loc["lat"],
+            lon         = loc["lon"],
+            city_name   = city,
+            output_path = fp,
+            loc_meta    = loc,
+            dry_run     = dry_run,
+        )
+        if filled:
+            any_filled = True
+
+    print(sep)
+    if total_missing == 0:
+        print("  ✅  All cities complete — no missing days found.")
+    elif dry_run:
+        print(f"  🔍  DRY RUN — would fill {total_missing} missing city-day(s).")
+    else:
+        print(f"  ✅  Filled {total_missing} missing day(s) across all cities.")
+        if any_filled:
+            _merge_india_csvs(out_dir, combined_path)
+    print(sep)
+
+
 def _wmo_category(code) -> str:
     if pd.isna(code):
         return "Unknown"
@@ -960,6 +1170,14 @@ def build_cli() -> argparse.ArgumentParser:
     )
     p.add_argument("--force",   action="store_true", help="Re-fetch all data")
     p.add_argument("--dry-run", action="store_true", help="Plan only, no API calls")
+    p.add_argument(
+        "--verify", action="store_true",
+        help=(
+            "Scan every city CSV for missing days (2010-01-01 → yesterday) and "
+            "fetch only the gaps.  Combine with --all-india / --state / --city. "
+            "Use --dry-run to report gaps without fetching."
+        ),
+    )
     return p
 
 
@@ -992,33 +1210,69 @@ def main() -> None:
         else:
             locs = INDIA_LOCATIONS
 
-        collect_all_india(
-            locations   = locs,
-            start       = start,
-            end         = end,
-            out_dir     = Path(args.out_dir),
-            combined_path = INDIA_COMBINED,
-            force       = args.force,
-            dry_run     = args.dry_run,
-            batch_size  = args.batch_size,
-        )
+        if args.verify:
+            verify_all_india(
+                locations     = locs,
+                start         = DATASET_START,
+                out_dir       = Path(args.out_dir),
+                combined_path = INDIA_COMBINED,
+                dry_run       = args.dry_run,
+            )
+        else:
+            collect_all_india(
+                locations     = locs,
+                start         = start,
+                end           = end,
+                out_dir       = Path(args.out_dir),
+                combined_path = INDIA_COMBINED,
+                force         = args.force,
+                dry_run       = args.dry_run,
+                batch_size    = args.batch_size,
+            )
         return
 
     # ── Single-city mode  (default / --city / --lat) ──────────────────────────
     if args.city:
-        lat, lon       = CITY_PRESETS[args.city]
-        city_label     = args.city.title()
+        lat, lon   = CITY_PRESETS[args.city]
+        city_label = args.city.title()
+        out_path   = Path(args.output)
     elif args.lat is not None:
-        lat, lon       = args.lat, (args.lon or DEFAULT_LON)
-        city_label     = f"Custom ({lat:.4f}°N, {lon:.4f}°E)"
+        lat, lon   = args.lat, (args.lon or DEFAULT_LON)
+        city_label = f"Custom ({lat:.4f}°N, {lon:.4f}°E)"
+        out_path   = Path(args.output)
     else:
-        lat, lon       = DEFAULT_LAT, DEFAULT_LON
-        city_label     = "New Delhi"
+        lat, lon   = DEFAULT_LAT, DEFAULT_LON
+        city_label = "New Delhi"
+        out_path   = Path(args.output)
+
+    if args.verify:
+        missing = find_missing_days(out_path, DATASET_START,
+                                    date.today() - timedelta(days=1))
+        sep = "─" * 62
+        print(sep)
+        print(f"  🔍  VERIFY — {city_label}")
+        print(f"  CSV         : {out_path}")
+        print(f"  Period      : {DATASET_START}  →  {date.today() - timedelta(days=1)}")
+        print(sep)
+        if not missing:
+            print("  ✅  Complete — no missing days.")
+        else:
+            print(f"  ⚠  {len(missing)} missing day(s)")
+            fill_missing_days(
+                missing     = missing,
+                lat         = lat,
+                lon         = lon,
+                city_name   = city_label,
+                output_path = out_path,
+                dry_run     = args.dry_run,
+            )
+        print(sep)
+        return
 
     df = collect_weather(
         lat=lat, lon=lon, city_name=city_label,
         start=start, end=end,
-        output_path=Path(args.output),
+        output_path=out_path,
         force=args.force, dry_run=args.dry_run,
     )
     if not df.empty:

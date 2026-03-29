@@ -453,6 +453,39 @@ in_monsoon_withdrawal_window  boolean — date within typical retreat window
 
 ## How to Run
 
+### Verify completeness and auto-fill any missing days (recommended first step)
+
+The `--verify` flag checks **every individual day** from `2010-01-01` to
+yesterday against what is in the CSV, then fetches and inserts only the
+missing date ranges — no full re-fetch needed.
+
+```bash
+# Check + fill all Tamil Nadu cities
+python src/data_collection/fetch_weather.py --verify --state "Tamil Nadu"
+
+# Check + fill all 165 India cities
+python src/data_collection/fetch_weather.py --verify --all-india
+
+# Report gaps only, make no API calls
+python src/data_collection/fetch_weather.py --verify --state "Tamil Nadu" --dry-run
+
+# Single city
+python src/data_collection/fetch_weather.py --verify --city mumbai
+```
+
+**How `--verify` works internally:**
+
+1. Builds the full expected date set `[2010-01-01, yesterday]`
+2. Reads the dates already in the CSV
+3. Computes `missing = expected − present`
+4. Groups consecutive missing dates into the fewest contiguous ranges
+   (e.g. `2010-01-01 → 2014-12-31` rather than 1,826 individual requests)
+5. Splits each range at the archive/climate boundary if it spans it
+6. Fetches only those ranges, inserts the rows at the correct position, saves
+7. Re-merges the combined CSV
+
+Safe to run at any time — fully **idempotent**.
+
 ### Collect weather for all Indian cities (full 2010–2030)
 
 ```bash
