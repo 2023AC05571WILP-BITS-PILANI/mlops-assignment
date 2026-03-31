@@ -68,7 +68,7 @@ python pipeline.py --list
 #### Option C: DVC
 
 ```bash
-pip install dvc pyyaml pandas scikit-learn
+pip install -r requirements.txt
 dvc repro                     # full pipeline (skip unchanged)
 dvc repro merge_daily         # single stage
 dvc repro --force             # re-run everything
@@ -97,15 +97,21 @@ mlops-assignment/
 ├── docker-compose.yml       ← service shortcuts (validate, merge, etc.)
 ├── run.sh                   ← convenience wrapper (--local / --build)
 ├── dvc.yaml                 ← DVC pipeline definition
+├── dvc.lock                 ← auto-generated reproducibility lock
 ├── params.yaml              ← all configurable parameters
 ├── requirements.txt         ← Python dependencies
+├── README.md
 ├── DVC_PIPELINE_README.md   ← detailed pipeline + "add new source" guide
+├── .gitignore
 ├── .dockerignore            ← keeps Docker context small
+├── .dvcignore               ← excludes junk from DVC scans
 ├── .github/workflows/
 │   └── pipeline.yml         ← CI/CD: lint → build → run
 │
 ├── src/
+│   ├── __init__.py
 │   ├── data_collection/
+│   │   ├── __init__.py
 │   │   ├── fetch_weather.py         ← weather from Open-Meteo API
 │   │   ├── fetch_missing_years.py   ← targeted retry for gaps
 │   │   ├── india_locations.py       ← ~165 city registry with zones
@@ -113,16 +119,20 @@ mlops-assignment/
 │   │   └── README.md
 │   │
 │   └── preprocessing/
+│       ├── __init__.py
 │       ├── prepare_calendar_features.py  ← calendar → ML features
 │       ├── aggregate_by_zone.py          ← multi-city → zone summaries
 │       └── merge_daily_features.py       ← calendar + weather → combined
 │
 ├── data/
 │   ├── calendar-events/             ← raw JSONs (2010–2030, git-tracked)
-│   ├── weather_daily.csv            ← single-city weather (DVC-tracked)
-│   ├── calendar_features_daily.csv  ← ML-ready calendar features
-│   ├── daily_combined.csv           ← FINAL merged dataset
-│   ├── weather_zone_*.csv           ← zone aggregates (optional)
+│   ├── weather_india/               ← per-city weather CSVs (generated)
+│   ├── weather_daily.csv            ← single-city weather (generated)
+│   ├── weather_india_combined.csv   ← all-India combined weather (generated)
+│   ├── calendar_events_parsed.csv   ← parsed calendar events (generated)
+│   ├── calendar_features_daily.csv  ← ML-ready calendar features (generated)
+│   ├── daily_combined.csv           ← FINAL merged dataset (generated)
+│   ├── weather_zone_*.csv           ← zone aggregates (generated, optional)
 │   ├── WEATHER_DATA_README.md       ← weather data dictionary
 │   └── CALENDAR_FEATURES_README.md  ← calendar features data dictionary
 │
