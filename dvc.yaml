@@ -1,0 +1,136 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# dvc.yaml — Reproducible data pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+# Two ways to run this pipeline:
+#
+#   1. DVC (incremental, caches unchanged stages):
+#        dvc repro                    # full pipeline
+#        dvc repro merge_daily        # single stage
+#        dvc dag                      # visualize DAG
+#
+#   2. Docker (isolated, reproducible):
+#        ./run.sh                     # full pipeline in Docker
+#        ./run.sh --stages merge_daily
+#        docker compose run --rm pipeline -v
+#
+#   3. Master script (local, with progress tracking):
+#        python pipeline.py           # full pipeline
+#        python pipeline.py --list    # show stages
+# ─────────────────────────────────────────────────────────────────────────────
+
+stages:
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ Stage 1 — Fetch daily weather from Open-Meteo (free, no API key)       │
+  # │ Re-runs when: weather params change, or fetch_weather.py is edited     │
+  # └─────────────────────────────────────────────────────────────────────────┘
+  fetch_weather:
+    cmd: >-
+      python src/data_collection/fetch_weather.py
+      --city ${weather.city}
+      --start ${weather.start_date}
+      --end ${weather.end_date}
+    deps:
+      - src/data_collection/fetch_weather.py
+      - src/data_collection/india_locations.py
+    params:
+      - weather
+    outs:
+      - data/weather_daily.csv:
+          cache: true
+          persist: true    # keep file on `dvc repro` even if stage is skipped
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ Stage 2 — Ingest calendar JSON files (git-clone or GitHub API)         │
+  # │ Re-runs when: ingest_calendar.py is edited                             │
+  # │ NOTE: calendar JSONs are checked into git so there are no DVC outs.    │
+  # │       Run manually: python src/data_collection/ingest_calendar.py      │
+  # └─────────────────────────────────────────────────────────────────────────┘
+  # ingest_calendar is a manual/optional step — JSONs are already in git.
+  # Uncomment below if you add new calendar sources that need fetching:
+  #
+  # ingest_calendar:
+  #   cmd: python src/data_collection/ingest_calendar.py
+  #   deps:
+  #     - src/data_collection/ingest_calendar.py
+  #   outs:
+  #     - data/calendar-events:
+  #         cache: false
+  #         persist: true
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ Stage 3 — Engineer calendar features (temporal + event encoding)       │
+  # │ Re-runs when: calendar JSONs change, or preprocessing script changes   │
+  # │ NOTE: data/calendar-events/ is git-tracked (small JSON files), not     │
+  # │       DVC-tracked, so it appears as a regular dep.                     │
+  # └─────────────────────────────────────────────────────────────────────────┘
+  prepare_calendar:
+    cmd: python src/preprocessing/prepare_calendar_features.py
+    deps:
+      - src/preprocessing/prepare_calendar_features.py
+      - data/calendar-events
+    params:
+      - calendar
+    outs:
+      - data/calendar_events_parsed.csv:
+          cache: true
+      - data/calendar_features_daily.csv:
+          cache: true
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ Stage 4 — Merge calendar + weather → daily_combined.csv                │
+  # │ This is the final dataset — one row per day with ALL features.         │
+  # │ Re-runs when: either upstream CSV changes, or merge params change      │
+  # └─────────────────────────────────────────────────────────────────────────┘
+  merge_daily:
+    cmd: python src/preprocessing/merge_daily_features.py --params params.yaml
+    deps:
+      - src/preprocessing/merge_daily_features.py
+      - data/calendar_features_daily.csv
+      - data/weather_daily.csv
+    params:
+      - merge
+    outs:
+      - data/daily_combined.csv:
+          cache: true
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ Stage 5 (optional) — Zone-level weather aggregation                    │
+  # │ Only needed if you ran fetch_weather.py with --all-india               │
+  # │ Run manually: dvc repro aggregate_zones                                │
+  # └─────────────────────────────────────────────────────────────────────────┘
+  aggregate_zones:
+    cmd: >-
+      python src/preprocessing/aggregate_by_zone.py
+      --input ${zones.input_csv}
+      --out-dir ${zones.output_dir}
+    deps:
+      - src/preprocessing/aggregate_by_zone.py
+      - src/data_collection/india_locations.py
+      - data/weather_india_combined.csv
+    params:
+      - zones
+    outs:
+      - data/weather_zone_koppen.csv:
+          cache: true
+          persist: true
+      - data/weather_zone_monsoon.csv:
+          cache: true
+          persist: true
+      - data/weather_zone_imd.csv:
+          cache: true
+          persist: true
+      - data/weather_zone_agri.csv:
+          cache: true
+          persist: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plot / metrics (optional — uncomment if you add training stages later)
+# ─────────────────────────────────────────────────────────────────────────────
+# metrics:
+#   - metrics/accuracy.json:
+#       cache: false
+# plots:
+#   - plots/confusion_matrix.csv:
+#       x: predicted
+#       y: actual

@@ -1,0 +1,91 @@
+name: Data Pipeline CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  IMAGE_NAME: mlops-pipeline
+
+jobs:
+
+  # ── Job 1: Lint & validate code ───────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint tools
+        run: pip install flake8 pyyaml
+
+      - name: Lint source code
+        run: |
+          flake8 src/ pipeline.py \
+            --max-line-length 120 \
+            --ignore E501,W503,E402
+
+      - name: Validate params.yaml
+        run: python -c "import yaml; yaml.safe_load(open('params.yaml'))"
+
+      - name: Validate dvc.yaml
+        run: python -c "import yaml; yaml.safe_load(open('dvc.yaml'))"
+
+  # ── Job 2: Build Docker image ─────────────────────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t $IMAGE_NAME .
+
+      - name: Verify image
+        run: docker run --rm $IMAGE_NAME --list
+
+      - name: Dry run
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/data:/app/data \
+            $IMAGE_NAME --dry-run
+
+  # ── Job 3: Run pipeline (only on push to main) ────────────────────────────
+  run-pipeline:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t $IMAGE_NAME .
+
+      - name: Run full pipeline
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/data:/app/data \
+            $IMAGE_NAME -v
+
+      - name: Validate output
+        run: |
+          echo "=== Output files ==="
+          ls -lh data/daily_combined.csv data/weather_daily.csv data/calendar_features_daily.csv
+          echo "=== Row counts ==="
+          wc -l data/daily_combined.csv data/weather_daily.csv data/calendar_features_daily.csv
+
+      - name: Upload pipeline output
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-output
+          path: |
+            data/daily_combined.csv
+            data/weather_daily.csv
+            data/calendar_features_daily.csv
+          retention-days: 7

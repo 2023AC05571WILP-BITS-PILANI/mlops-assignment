@@ -1,0 +1,82 @@
+schema: '2.0'
+stages:
+  fetch_weather:
+    cmd: python src/data_collection/fetch_weather.py --city delhi --start 
+      2010-01-01 --end 2030-12-31
+    deps:
+    - path: src/data_collection/fetch_weather.py
+      hash: md5
+      md5: 474e30dce302e684ca8585f32d9ca68b
+      size: 56271
+    - path: src/data_collection/india_locations.py
+      hash: md5
+      md5: ee2cc7d4b568bacdbc1e4e9e7faa9029
+      size: 54785
+    params:
+      params.yaml:
+        weather:
+          city: delhi
+          start_date: '2010-01-01'
+          end_date: '2030-12-31'
+          output_csv: data/weather_daily.csv
+    outs:
+    - path: data/weather_daily.csv
+      hash: md5
+      md5: bbabf4ca8ed23fc6710380fc25c5ed1b
+      size: 1099083
+  prepare_calendar:
+    cmd: python src/preprocessing/prepare_calendar_features.py
+    deps:
+    - path: data/calendar-events
+      hash: md5
+      md5: 8aaa365fddabbf65052ea45ca285fdd1.dir
+      size: 335801
+      nfiles: 23
+    - path: src/preprocessing/prepare_calendar_features.py
+      hash: md5
+      md5: 3d5ba7d7ef5c23056a0ba155a3232de6
+      size: 25785
+    params:
+      params.yaml:
+        calendar:
+          data_dir: data/calendar-events
+          output_events_csv: data/calendar_events_parsed.csv
+          output_features_csv: data/calendar_features_daily.csv
+    outs:
+    - path: data/calendar_events_parsed.csv
+      hash: md5
+      md5: 8e461f74646b8fa67cc6a3cc22e00e6d
+      size: 139542
+    - path: data/calendar_features_daily.csv
+      hash: md5
+      md5: 4213e116b69a75c7bdebedab792e6a67
+      size: 2217548
+  merge_daily:
+    cmd: python src/preprocessing/merge_daily_features.py --params params.yaml
+    deps:
+    - path: data/calendar_features_daily.csv
+      hash: md5
+      md5: 4213e116b69a75c7bdebedab792e6a67
+      size: 2217548
+    - path: data/weather_daily.csv
+      hash: md5
+      md5: bbabf4ca8ed23fc6710380fc25c5ed1b
+      size: 1099083
+    - path: src/preprocessing/merge_daily_features.py
+      hash: md5
+      md5: 30c274e53b0094feb5542ef08091848d
+      size: 4682
+    params:
+      params.yaml:
+        merge:
+          calendar_csv: data/calendar_features_daily.csv
+          weather_csv: data/weather_daily.csv
+          output_csv: data/daily_combined.csv
+          join_type: left
+          drop_duplicate_cols:
+          - year_norm
+    outs:
+    - path: data/daily_combined.csv
+      hash: md5
+      md5: 2793bb1e1d9188993b4beeceab209dbf
+      size: 3181467

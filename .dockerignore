@@ -1,0 +1,30 @@
+# ── Docker build context exclusions ───────────────────────────────────────────
+.git
+.dvc/cache
+.dvc/tmp
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+.env
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Large generated data (mounted at runtime, not baked in)
+data/weather_daily.csv
+data/weather_india/
+data/weather_india_combined.csv
+data/weather_zone_*.csv
+data/calendar_events_parsed.csv
+data/calendar_features_daily.csv
+data/daily_combined.csv
+
+# Docs (not needed in image)
+*.md
+!data/WEATHER_DATA_README.md
+!data/CALENDAR_FEATURES_README.md
+
+# Lock files
+dvc.lock

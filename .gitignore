@@ -49,25 +49,14 @@ dmypy.json
 .ruff_cache/
 .pytype/
 
-# ── ML / MLflow ───────────────────────────────────────────────────────────────
-mlflow_logs/
-mlruns/
-*.pkl
-*.joblib
-*.h5
-*.hdf5
-*.onnx
-*.pt
-*.pth
-*.pb
-
-# ── Data files (large / generated) ────────────────────────────────────────────
+# ── Data files (DVC-tracked / generated) ──────────────────────────────────────
 data/weather_daily.csv
 data/weather_india/
 data/weather_india_combined.csv
 data/weather_zone_*.csv
 data/calendar_events_parsed.csv
 data/calendar_features_daily.csv
+data/daily_combined.csv
 # DVC tracks the actual data files; keep .dvc pointer files
 !data/*.dvc
 !data/**/*.dvc
@@ -75,15 +64,6 @@ data/calendar_features_daily.csv
 # ── Logs ──────────────────────────────────────────────────────────────────────
 logs/
 *.log
-mounted_logs/
-
-# ── Docker ────────────────────────────────────────────────────────────────────
-.dockerignore
-
-# ── Monitoring / Prometheus ───────────────────────────────────────────────────
-prometheus_data/
-# keep config, ignore runtime data
-!prometheus_config/
 
 # ── OS & editor artefacts ─────────────────────────────────────────────────────
 .DS_Store

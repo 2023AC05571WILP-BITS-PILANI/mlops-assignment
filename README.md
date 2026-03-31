@@ -1,77 +1,183 @@
 # mlops-assignment
 
-github-repo: https://github.com/2023AC05571WILP-BITS-PILANI/mlops-assignment  (code, data, model, pipeline)
-Docker hub url : https://hub.docker.com/repositories/sanjaykumarcbits 
-Docker image url : https://hub.docker.com/repository/docker/sanjaykumarcbits/iris-predictor/general (image)
+A **DVC-managed MLOps data pipeline** that collects, processes, and merges
+Indian weather data and calendar/festival events into a single ML-ready
+daily feature dataset.
 
+**GitHub repo:** https://github.com/2023AC05571WILP-BITS-PILANI/mlops-assignment
 
+---
 
-📁 .github/workflows/
-Contains GitHub Actions workflow YAML files to automate CI/CD tasks like testing, building, and deployment.
-This pipeline automates code validation, containerization, and deployment for consistent and reliable delivery.
-On every push to the main branch. It first runs a linting and testing job using flake8 and pytest to ensure code quality and correctness. If tests pass, it proceeds to build a Docker image of the project and pushes it to Docker Hub using credentials stored in GitHub Secrets. The final job deploys the Docker container locally on a Mac machine, pulling the latest image
+## What This Project Does
 
-📁 data/
-Contains the Iris dataset (iris.csv) and its DVC tracking file for version control of data.
+```
+Open-Meteo APIs ──→ fetch_weather.py ──→ weather_daily.csv ──┐
+                                                              ├─→ merge ──→ daily_combined.csv
+GitHub calendar ──→ calendar-events/*.json ──→                │     (7,670 rows × 73 columns)
+                    prepare_calendar_features.py ─────────────┘     one row per day, 2010–2030
+```
 
-📁 iris-fastapi/
-FastAPI-based microservice exposing ML model predictions via REST API, with tests and dependencies.
-This FastAPI script sets up a REST API for predicting Iris flower species using MLflow-managed models. It randomly selects between Logistic Regression and Random Forest models based on accuracy, logs requests and predictions, and exposes Prometheus metrics for monitoring. The /predict endpoint accepts flower measurements and returns the predicted class. Logging is centralized in main.log, and Prometheus tracks request counts.
+| Dataset | Rows | Columns | Description |
+|---------|------|---------|-------------|
+| Weather | 7,670 | 31 | Daily temp, rain, wind, UV, seasons for Delhi (2010–2030) |
+| Calendar | 7,670 | 44 | Event flags, cyclical time encoding, rolling windows |
+| **Combined** | **7,670** | **73** | All features merged on `date` — ML-ready |
 
-📁 mlflow_logs/
-Stores MLflow experiment tracking data including models, metrics, parameters, and artifacts.
+---
 
-📁 mlops-assignment/
-Holds a serialized scaler (scaler.pkl) used for model input standardization in the assignment.
+## Quick Start
 
-📁 mounted_logs/
-Contains runtime logs (main.log) for debugging and monitoring application behavior.
+### 3 Ways to Run
 
-📁 prometheus_config/
-Configuration file (prometheus.yml) for setting up Prometheus monitoring.
+#### Option A: Docker (recommended — no local deps needed)
 
-📁 src/
-Modular source code for data preprocessing, transformation, and training ML models (Logistic & Random Forest).
-Organized by ML pipeline stages. "preprocessing/load_data.py" for Data loading.
-"transformation/transform_data.py" for Data transformation.
-"training/train_model_logisticregression.py, train_model_randomforest.py" for  Model training scripts. "main.py"  
+```bash
+# Full pipeline
+./run.sh
 
-main.py
-trains and logs two machine learning models—Logistic Regression and Random Forest—on the Iris dataset using MLflow. It loads and transforms the data, trains each model, evaluates accuracy, and logs parameters, metrics, and artifacts (including the scaler). Each model is registered in MLflow with a unique name for future retrieval and deployment. The scaler used for preprocessing is saved locally and also logged as an artifact. The workflow ensures reproducibility and traceability of experiments through MLflow’s tracking and model registry.
+# Skip slow fetch stages when data already exists
+./run.sh --skip fetch_weather ingest_calendar
 
-Dockerfile
-builds a Docker image named iris-predictor from the current directory using the Dockerfile. The second command runs the container, mounts local directories for logs and MLflow tracking, and exposes the app on port 8000 for external access.
+# Single stage
+docker compose run --rm validate
+docker compose run --rm merge
 
-trigger_training_on_data_change.sh
-continuously monitors the iris.csv file for changes using fswatch. When a change is detected, it automatically triggers the execution of a Python pipeline script (main.py) to reprocess or retrain the model.
+# Rebuild image after code changes
+./run.sh --build
+```
 
-          ┌──────────────┐
-          │   Code Push  │      
-          │  to 'main'   │
-          └──────┬───────┘
-                 │
-        ┌────────▼────────┐
-        │   lint-test job │
-        │ - flake8 lint   │
-        │ - pytest tests  │
-        └────────┬────────┘
-                 │
-        ┌────────▼────────────┐
-        │ docker-build-push   │
-        │ - Build Docker image│
-        │ - Push to Docker Hub│
-        └────────┬────────────┘
-                 │
-        ┌────────▼────────────┐
-        │     deploy job      │
-        │ - Pull image        │
-        │ - Run container     │
-        └─────────────────────┘
+#### Option B: Local Python
 
+```bash
+pip install -r requirements.txt
 
-        INSTRUCTIONS TO RUN:
-        1. Open terminal and run start_all_services.sh. 
-        2. This will start prediction service, mlflow ui, Prometheus and Grafana (grafana needs to be configured for source)
-        3. query the precition service using : curl -X POST "http://localhost:8000/predict"   -H "Content-Type: application/json"   -d '{"sepal_length": 5.1, "sepal_width": 3.5, 
-         "petal_length": 1.4, "petal_width": 0.2}’
-        
+# Full pipeline
+python pipeline.py -v
+
+# Skip stages / pick stages
+python pipeline.py --skip fetch_weather ingest_calendar -v
+python pipeline.py --stages merge_daily validate -v
+
+# Dry run (show plan without executing)
+python pipeline.py --dry-run
+
+# List all stages
+python pipeline.py --list
+```
+
+#### Option C: DVC
+
+```bash
+pip install dvc pyyaml pandas scikit-learn
+dvc repro                     # full pipeline (skip unchanged)
+dvc repro merge_daily         # single stage
+dvc repro --force             # re-run everything
+dvc dag                       # view pipeline DAG
+```
+
+### Pipeline Stages
+
+| # | Stage | Description |
+|---|-------|-------------|
+| 1 | **fetch_weather** | Fetches daily weather from Open-Meteo (free, no API key) |
+| 2 | **ingest_calendar** | Clones calendar JSONs from GitHub |
+| 3 | **prepare_calendar** | Parses JSONs → temporal features + event encoding |
+| 4 | **merge_daily** | Left-joins calendar + weather → `daily_combined.csv` |
+| 5 | **aggregate_zones** | Multi-city zone summaries (optional) |
+| 6 | **validate** | Checks row count, date range, duplicates, coverage |
+
+---
+
+## Project Structure
+
+```
+mlops-assignment/
+├── pipeline.py              ← master orchestrator (6 stages)
+├── Dockerfile               ← containerized pipeline image
+├── docker-compose.yml       ← service shortcuts (validate, merge, etc.)
+├── run.sh                   ← convenience wrapper (--local / --build)
+├── dvc.yaml                 ← DVC pipeline definition
+├── params.yaml              ← all configurable parameters
+├── requirements.txt         ← Python dependencies
+├── DVC_PIPELINE_README.md   ← detailed pipeline + "add new source" guide
+├── .dockerignore            ← keeps Docker context small
+├── .github/workflows/
+│   └── pipeline.yml         ← CI/CD: lint → build → run
+│
+├── src/
+│   ├── data_collection/
+│   │   ├── fetch_weather.py         ← weather from Open-Meteo API
+│   │   ├── fetch_missing_years.py   ← targeted retry for gaps
+│   │   ├── india_locations.py       ← ~165 city registry with zones
+│   │   ├── ingest_calendar.py       ← clone calendar JSONs from GitHub
+│   │   └── README.md
+│   │
+│   └── preprocessing/
+│       ├── prepare_calendar_features.py  ← calendar → ML features
+│       ├── aggregate_by_zone.py          ← multi-city → zone summaries
+│       └── merge_daily_features.py       ← calendar + weather → combined
+│
+├── data/
+│   ├── calendar-events/             ← raw JSONs (2010–2030, git-tracked)
+│   ├── weather_daily.csv            ← single-city weather (DVC-tracked)
+│   ├── calendar_features_daily.csv  ← ML-ready calendar features
+│   ├── daily_combined.csv           ← FINAL merged dataset
+│   ├── weather_zone_*.csv           ← zone aggregates (optional)
+│   ├── WEATHER_DATA_README.md       ← weather data dictionary
+│   └── CALENDAR_FEATURES_README.md  ← calendar features data dictionary
+│
+└── .dvc/                            ← DVC configuration
+```
+
+---
+
+## Configuration
+
+All parameters live in **params.yaml**:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `weather.city` | `delhi` | City preset for weather collection |
+| `weather.start_date` | `2010-01-01` | Start of date range |
+| `weather.end_date` | `2030-12-31` | End of date range |
+| `merge.join_type` | `left` | `left` (keep all days) or `inner` (only overlap) |
+
+Change a value → `dvc repro` re-runs only the affected stages.
+
+---
+
+## Adding a New Data Source
+
+See [DVC_PIPELINE_README.md](DVC_PIPELINE_README.md) for the full guide.
+
+**TL;DR:**
+1. Write a collection script in `src/data_collection/` with a `date` column
+2. Add its config to `params.yaml`
+3. Add a stage to `dvc.yaml`
+4. Wire it as a dependency of `merge_daily`
+5. Run `dvc repro`
+
+---
+
+## Data Sources
+
+- **Weather:** [Open-Meteo](https://open-meteo.com/) — free, no API key
+  - Archive: ERA5 reanalysis (2010 → ~7 days ago)
+  - Projections: CMIP6 MRI-AGCM3-2-S (~7 days ago → 2030)
+- **Calendar:** [calendar-bharat](https://github.com/jayantur13/calendar-bharat) — Indian festivals & holidays
+
+---
+
+## Useful Commands
+
+| Command | Description |
+|---------|-------------|
+| `./run.sh` | Full pipeline in Docker |
+| `./run.sh --local -v` | Full pipeline locally (verbose) |
+| `python pipeline.py --list` | Show all stages & dependencies |
+| `python pipeline.py --dry-run` | Preview execution plan |
+| `docker compose run --rm validate` | Run just validation |
+| `dvc repro` | Run full DVC pipeline (skip unchanged) |
+| `dvc status` | Show which stages are out of date |
+| `dvc dag` | Visualize pipeline graph |
+| `dvc params diff` | Show param changes since last run |

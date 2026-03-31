@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — MLOps Data Pipeline services
+# ─────────────────────────────────────────────────────────────────────────────
+# Run the full pipeline:
+#   docker compose run --rm pipeline
+#
+# Run specific stages:
+#   docker compose run --rm pipeline --stages fetch_weather
+#   docker compose run --rm pipeline --stages prepare_calendar merge_daily
+#
+# List stages:
+#   docker compose run --rm pipeline --list
+#
+# Dry run:
+#   docker compose run --rm pipeline --dry-run
+#
+# Run with DVC:
+#   docker compose run --rm dvc repro
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Main pipeline runner ──────────────────────────────────────────────────
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount data directory for persistent output across runs
+      - ./data:/app/data
+      # Mount params for live config changes without rebuild
+      - ./params.yaml:/app/params.yaml:ro
+    environment:
+      - PYTHONUNBUFFERED=1     # ensure real-time log output
+
+  # ── Individual stage shortcuts ────────────────────────────────────────────
+  fetch-weather:
+    extends:
+      service: pipeline
+    command: ["--stages", "fetch_weather", "-v"]
+
+  prepare-calendar:
+    extends:
+      service: pipeline
+    command: ["--stages", "ingest_calendar", "prepare_calendar", "-v"]
+
+  merge:
+    extends:
+      service: pipeline
+    command: ["--stages", "merge_daily", "validate", "-v"]
+
+  validate:
+    extends:
+      service: pipeline
+    command: ["--stages", "validate", "-v"]
+
+  # ── DVC runner (for dvc repro inside Docker) ──────────────────────────────
+  dvc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/app/data
+      - ./params.yaml:/app/params.yaml:ro
+      - ./dvc.yaml:/app/dvc.yaml:ro
+      - ./dvc.lock:/app/dvc.lock
+      - ./.dvc:/app/.dvc:ro
+    entrypoint: ["dvc"]
+    command: ["repro"]
+    environment:
+      - PYTHONUNBUFFERED=1

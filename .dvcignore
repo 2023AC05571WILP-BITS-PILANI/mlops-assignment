@@ -1,3 +1,19 @@
 # Add patterns of files dvc should ignore, which could improve
 # the performance. Learn more at
 # https://dvc.org/doc/user-guide/dvcignore
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Docker / CI
+Dockerfile
+docker-compose.yml
+.dockerignore
+.github/

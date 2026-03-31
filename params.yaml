@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# params.yaml — Single source of truth for the DVC pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+# Every stage in dvc.yaml reads its config from here.
+# Change a value → `dvc repro` re-runs only the affected stages.
+
+# ── Stage 1: Weather collection ──────────────────────────────────────────────
+weather:
+  city: delhi                    # preset: delhi|mumbai|chennai|kolkata|bengaluru|...
+  start_date: "2010-01-01"
+  end_date: "2030-12-31"
+  output_csv: data/weather_daily.csv
+
+# ── Stage 2: Calendar feature engineering ────────────────────────────────────
+calendar:
+  data_dir: data/calendar-events     # folder with calendar-YYYY.json files
+  output_events_csv: data/calendar_events_parsed.csv
+  output_features_csv: data/calendar_features_daily.csv
+
+# ── Stage 3: Zone aggregation (optional — for multi-city weather) ────────────
+zones:
+  input_csv: data/weather_india_combined.csv
+  output_dir: data
+  zone_types:
+    - koppen
+    - monsoon_zone
+    - imd_zone
+    - agri_zone
+
+# ── Stage 4: Merge calendar + weather into one daily CSV ─────────────────────
+merge:
+  calendar_csv: data/calendar_features_daily.csv
+  weather_csv: data/weather_daily.csv
+  output_csv: data/daily_combined.csv
+  join_type: left                # left = keep all calendar days; inner = only overlap
+  drop_duplicate_cols:           # columns in BOTH CSVs — dropped from weather side
+    - year_norm
